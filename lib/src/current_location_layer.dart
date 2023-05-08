@@ -30,10 +30,6 @@ class CurrentLocationLayer extends StatefulWidget {
   /// [LocationMarkerDataStreamFactory.fromGeolocatorPositionStream].
   final Stream<LocationMarkerPosition?> positionStream;
 
-  /// A Stream that provide heading data for this marker. Default to
-  /// [LocationMarkerDataStreamFactory.fromCompassHeadingStream].
-  final Stream<LocationMarkerHeading?> headingStream;
-
   /// A screen point that when the map follow to the marker. The point
   /// (-1.0, -1.0) indicate the top-left corner of the map widget. The point
   /// (+1.0, +1.0) indicate the bottom-right corner of the map widget. The point
@@ -106,7 +102,6 @@ class CurrentLocationLayer extends StatefulWidget {
     super.key,
     this.style = const LocationMarkerStyle(),
     Stream<LocationMarkerPosition?>? positionStream,
-    Stream<LocationMarkerHeading?>? headingStream,
     this.followScreenPoint = _originPoint,
     this.followScreenPointOffset = _originPoint,
     this.followCurrentLocationStream,
@@ -122,11 +117,9 @@ class CurrentLocationLayer extends StatefulWidget {
     this.rotateAnimationDuration = const Duration(milliseconds: 200),
     this.rotateAnimationCurve = Curves.easeInOut,
     this.indicators = const LocationMarkerIndicators(),
-  })  : positionStream = positionStream ??
+  }) : positionStream = positionStream ??
             const LocationMarkerDataStreamFactory()
-                .fromGeolocatorPositionStream(),
-        headingStream = headingStream ??
-            const LocationMarkerDataStreamFactory().fromCompassHeadingStream();
+                .fromGeolocatorPositionStream();
 
   @override
   State<CurrentLocationLayer> createState() => _CurrentLocationLayerState();
@@ -140,10 +133,8 @@ class _CurrentLocationLayerState extends State<CurrentLocationLayer>
   double? _followingZoom;
 
   late bool _isFirstLocationUpdate;
-  late bool _isFirstHeadingUpdate;
 
   late StreamSubscription<LocationMarkerPosition?> _positionStreamSubscription;
-  late StreamSubscription<LocationMarkerHeading?> _headingStreamSubscription;
 
   /// Subscription to a stream for following single that also include a zoom
   /// level.
@@ -161,9 +152,7 @@ class _CurrentLocationLayerState extends State<CurrentLocationLayer>
   void initState() {
     super.initState();
     _isFirstLocationUpdate = true;
-    _isFirstHeadingUpdate = true;
     _subscriptPositionStream();
-    _subscriptHeadingStream();
     _subscriptFollowCurrentLocationStream();
     _subscriptTurnHeadingUpStream();
   }
@@ -174,10 +163,6 @@ class _CurrentLocationLayerState extends State<CurrentLocationLayer>
     if (widget.positionStream != oldWidget.positionStream) {
       _positionStreamSubscription.cancel();
       _subscriptPositionStream();
-    }
-    if (widget.headingStream != oldWidget.headingStream) {
-      _headingStreamSubscription.cancel();
-      _subscriptHeadingStream();
     }
     if (widget.followCurrentLocationStream !=
         oldWidget.followCurrentLocationStream) {
@@ -301,7 +286,6 @@ class _CurrentLocationLayerState extends State<CurrentLocationLayer>
   @override
   void dispose() {
     _positionStreamSubscription.cancel();
-    _headingStreamSubscription.cancel();
     _followCurrentLocationStreamSubscription?.cancel();
     _turnHeadingUpStreamSubscription?.cancel();
     _moveMapAnimationController?.dispose();
@@ -366,32 +350,6 @@ class _CurrentLocationLayerState extends State<CurrentLocationLayer>
             break;
         }
       },
-    );
-  }
-
-  void _subscriptHeadingStream() {
-    _headingStreamSubscription = widget.headingStream.listen(
-      (LocationMarkerHeading? heading) {
-        _rotateMarker(heading!);
-
-        bool turnHeadingUp;
-        switch (widget.turnOnHeadingUpdate) {
-          case TurnOnHeadingUpdate.always:
-            turnHeadingUp = true;
-            break;
-          case TurnOnHeadingUpdate.once:
-            turnHeadingUp = _isFirstHeadingUpdate;
-            _isFirstHeadingUpdate = false;
-            break;
-          case TurnOnHeadingUpdate.never:
-            turnHeadingUp = false;
-            break;
-        }
-        if (turnHeadingUp) {
-          _rotateMap(-heading.heading % (2 * pi));
-        }
-      },
-      onError: (_) => setState(() => _currentHeading = null),
     );
   }
 
@@ -528,39 +486,6 @@ class _CurrentLocationLayerState extends State<CurrentLocationLayer>
     });
 
     return _moveMapAnimationController!.forward();
-  }
-
-  TickerFuture _rotateMarker(LocationMarkerHeading heading) {
-    _rotateMarkerAnimationController?.dispose();
-    _rotateMarkerAnimationController = AnimationController(
-      duration: widget.rotateAnimationDuration,
-      vsync: this,
-    );
-    final animation = CurvedAnimation(
-      parent: _rotateMarkerAnimationController!,
-      curve: widget.rotateAnimationCurve,
-    );
-    final headingTween = LocationMarkerHeadingTween(
-      begin: _currentHeading ?? heading,
-      end: heading,
-    );
-
-    _rotateMarkerAnimationController!.addListener(() {
-      if (_status == _Status.ready) {
-        setState(() => _currentHeading = headingTween.evaluate(animation));
-      }
-    });
-
-    _rotateMarkerAnimationController!
-        .addStatusListener((AnimationStatus status) {
-      if (status == AnimationStatus.completed ||
-          status == AnimationStatus.dismissed) {
-        _rotateMarkerAnimationController!.dispose();
-        _rotateMarkerAnimationController = null;
-      }
-    });
-
-    return _rotateMarkerAnimationController!.forward();
   }
 
   TickerFuture _rotateMap(double angle) {

@@ -75,7 +75,6 @@ class _CustomStreamExampleState extends State<CustomStreamExample> {
               ),
               CurrentLocationLayer(
                 positionStream: _positionStreamController.stream,
-                headingStream: _headingStreamController.stream,
               ),
             ],
           ),
